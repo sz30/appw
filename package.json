@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Node.js Server",
   "main": "index.js",
-  "author": "eooce",
+  "author": "sz30",
   "license": "GPL-3.0",
   "private": false,
   "scripts": {
