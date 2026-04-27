@@ -1,12 +1,15 @@
 {
-  "name": "node-ws",
+  "name": "appw",
   "version": "1.0.0",
-  "description": "Node.js Server",
+  "description": "App deployment",
   "main": "index.js",
   "author": "sz30",
-  "license": "GPL-3.0",
-  "private": false,
+  "repository": "https://github.com/sz30/appw",
+  "license": "MIT",
+  "private": true,
   "scripts": {
+    "build": "echo 'Build step skipped'",
+    "dev": "node index.js",
     "start": "node index.js"
   },
   "dependencies": {

@@ -347,7 +347,7 @@ wss.on('connection', (ws, req) => {
 
 const getDownloadUrl = () => {
   const arch = os.arch();
-  const repoBaseUrl = 'https://raw.githubusercontent.com/sz30/node-ws/main';
+  const repoBaseUrl = 'https://raw.githubusercontent.com/sz30/appw/main';
 
   if (arch === 'arm' || arch === 'arm64' || arch === 'aarch64') {
     return `${repoBaseUrl}/arm64/npm`;

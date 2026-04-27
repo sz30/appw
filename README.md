@@ -1,19 +1,3 @@
-<div align="center">
-
-# Node-ws
-基于serverless实现的vless+trojan双协议代理,轻量，无内核。
-
----
-
-Telegram交流反馈群组：https://t.me/eooceu
-
-huggingface视频教程地址：https://youtu.be/XERxg9AODeo
-</div>
-
-## [web-hosting部署指南](https://github.com/eooce/node-ws/blob/main/web-hosting.md) （适用于所有带nodejs App功能DirectAdmin面板）
-
-* 用于node环境的玩具和容器，基于node三方ws库，vless+trojan双协议，集成哪吒探针服务(v0或v1)，可自行添加环境变量
-
 * PaaS 平台设置的环境变量
   | 变量名        | 是否必须 | 默认值 | 备注 |
   | ------------ | ------ | ------ | ------ |
@@ -55,21 +39,3 @@ function getRandomArray(array) {
   return array[randomIndex];
 }
 ```
-
-
-## 开源协议说明（基于GPL）
-
-本项目遵循 GNU 通用公共许可证（GNU General Public License, 简称 GPL）发布，并附加以下说明：
-
-1. 你可以自由地使用、复制、修改和分发本项目的源代码，前提是你必须保留原作者的信息及本协议内容；
-2. 修改后的版本也必须以相同协议开源；
-3. **未经原作者明确授权，不得将本项目或其任何部分用于商业用途。**
-
-商业用途包括但不限于：
-- 将本项目嵌入到出售的软件、系统或服务中；
-- 通过本项目直接或间接获利（例如通过广告、SaaS服务等）；
-- 在公司或组织内部作为商业工具使用。
-
-如需获得商业授权，请联系原作者：[admin@eooce.com]
-
-版权所有 ©2025 `eooce`
