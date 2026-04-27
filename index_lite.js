@@ -10,11 +10,10 @@ const crypto = require('crypto');
 const { Buffer } = require('buffer');
 const { exec, execSync } = require('child_process');
 const { WebSocket, createWebSocketStream } = require('ws');
-
 const UUID = process.env.UUID || '5efabea4-f6d4-91fd-b8f0-17e004c89c60';
 const NEZHA_SERVER = process.env.NEZHA_SERVER || '';
 const NEZHA_KEY = process.env.NEZHA_KEY || '';
-const DOMAIN = process.env.DOMAIN || 'your-domain.com';
+const DOMAIN = process.env.DOMAIN || '';
 const WSPATH = process.env.WSPATH || UUID.slice(0, 8);
 const SUB_PATH = process.env.SUB_PATH || 'sub';
 const NAME = process.env.NAME || '';
@@ -71,13 +70,30 @@ const httpServer = http.createServer(async (req, res) => {
   } else if (req.url === `/${SUB_PATH}`) {
     await getisp();
     await getip();
+
+    let finalDomain = CurrentDomain;
+    let finalPort = CurrentPort;
+    let finalTls = Tls;
+
+    if (!DOMAIN || DOMAIN === 'your-domain.com') {
+      const hostHeader = req.headers['x-forwarded-host'] || req.headers.host;
+      if (hostHeader) {
+        const hostName = hostHeader.split(':')[0];
+        if (!/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}/.test(hostName)) {
+          finalDomain = hostName;
+          finalPort = 443;
+          finalTls = 'tls';
+        }
+      }
+    }
+
     const namePart = NAME ? `${NAME}-${ISP}` : ISP;
-    const tlsParam = Tls === 'tls' ? 'tls' : 'none';
-    const ssTlsParam = Tls === 'tls' ? 'tls;' : '';
-    const vlsURL = `vless://${UUID}@${CurrentDomain}:${CurrentPort}?encryption=none&security=${tlsParam}&sni=${CurrentDomain}&fp=chrome&type=ws&host=${CurrentDomain}&path=%2F${WSPATH}#${namePart}`;
-    const troURL = `trojan://${UUID}@${CurrentDomain}:${CurrentPort}?security=${tlsParam}&sni=${CurrentDomain}&fp=chrome&type=ws&host=${CurrentDomain}&path=%2F${WSPATH}#${namePart}`;
+    const tlsParam = finalTls === 'tls' ? 'tls' : 'none';
+    const ssTlsParam = finalTls === 'tls' ? 'tls;' : '';
+    const vlsURL = `vless://${UUID}@${finalDomain}:${finalPort}?encryption=none&security=${tlsParam}&sni=${finalDomain}&fp=chrome&type=ws&host=${finalDomain}&path=%2F${WSPATH}#${namePart}`;
+    const troURL = `trojan://${UUID}@${finalDomain}:${finalPort}?security=${tlsParam}&sni=${finalDomain}&fp=chrome&type=ws&host=${finalDomain}&path=%2F${WSPATH}#${namePart}`;
     const ssMethodPassword = Buffer.from(`none:${UUID}`).toString('base64');
-    const ssURL = `ss://${ssMethodPassword}@${CurrentDomain}:${CurrentPort}?plugin=v2ray-plugin;mode%3Dwebsocket;host%3D${CurrentDomain};path%3D%2F${WSPATH};${ssTlsParam}sni%3D${CurrentDomain};skip-cert-verify%3Dtrue;mux%3D0#${namePart}`;
+    const ssURL = `ss://${ssMethodPassword}@${finalDomain}:${finalPort}?plugin=v2ray-plugin;mode%3Dwebsocket;host%3D${finalDomain};path%3D%2F${WSPATH};${ssTlsParam}sni%3D${finalDomain};skip-cert-verify%3Dtrue;mux%3D0#${namePart}`;
     const subscription = vlsURL + '\n' + troURL + '\n' + ssURL;
     const base64Content = Buffer.from(subscription).toString('base64');
 
