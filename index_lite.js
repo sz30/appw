@@ -9,19 +9,32 @@ const { pipeline } = require('stream/promises');
 const http = require('http');
 const net = require('net');
 const { WebSocket, createWebSocketStream } = require('ws');
-// 环境变量优先；平台不支持环境变量时，直接填写下面的默认值后再混淆。
-const UUID = process.env.UUID || ''; // 填 dashboard 中对应服务器的 ID，同时作为代理 UUID
-const PROBE_URL = process.env.PROBE_URL || 'https://tz.765431.xyz/update';
-const PROBE_SECRET = process.env.PROBE_SECRET || ''; // 留空不启动探针
+// 环境变量优先；平台没有环境变量设置栏时，修改这里的默认值，再进行混淆。
+// UUID：Dashboard 新建服务器生成的 ID；同时用作 VLESS/Trojan 代理 UUID。
+const UUID = process.env.UUID || '';
+// PROBE_SECRET：Dashboard 的探针密钥。留空则不启动探针。不要提交真实密钥到公开仓库。
+const PROBE_SECRET = process.env.PROBE_SECRET || '';
+// 以下探针参数与你的安装命令一致；只有上报地址或测速节点变化时才需要修改。
+// PROBE_URL：CF-Server-Monitor 接收探针数据的 Worker /update 地址，不是代理节点域名。
+const PROBE_URL = process.env.PROBE_URL || '';
+// PROBE_INTERVAL：HTTP 上报间隔，单位秒；auto 模式还会使用探针的 WSS 实时上报。
 const PROBE_INTERVAL = Number(process.env.PROBE_INTERVAL || 60);
+// PROBE_CT / CU / CM：电信、联通、移动网络测速目标。
 const PROBE_CT = process.env.PROBE_CT ?? 'gd-ct-dualstack.ip.zstaticcdn.com';
 const PROBE_CU = process.env.PROBE_CU ?? 'gd-cu-dualstack.ip.zstaticcdn.com';
 const PROBE_CM = process.env.PROBE_CM ?? 'gd-cm-dualstack.ip.zstaticcdn.com';
+// FILE_PATH：临时配置和启动文件所在目录；启动 90 秒后清理其中的本次运行文件。
 const FILE_PATH = process.env.FILE_PATH || '.tmp';
+// SUB_PATH：订阅地址的路径；默认访问 https://你的域名/sub。
 const SUB_PATH = (process.env.SUB_PATH || 'sub').replace(/^\/+|\/+$/g, '');
-const NAME = process.env.NAME || 'Node';
+// NAME：节点名前缀；自动追加出口 IP 对应的地区和 ISP。
+const NAME = process.env.NAME || 'US-D4';
+// PORT：Node 服务监听端口；一般由 SaaS 平台通过 PORT 环境变量提供。
 const PORT = Number(process.env.SERVER_PORT || process.env.PORT || 3000);
+// DOMAIN：客户端连接代理时使用的公网域名，不是 Worker 上报地址，也不是订阅路径。
+// 留空时优先使用请求中的域名；请求使用 IP 或 localhost 时，查询公网 IP。
 const DOMAIN = process.env.DOMAIN || '';
+// WSPATH：代理 WebSocket 路径；默认取 UUID 前 8 个字符，通常无需单独设置。
 const WSPATH = (process.env.WSPATH || UUID.slice(0, 8)).replace(/^\/+|\/+$/g, '');
 
 if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(UUID)) {
@@ -130,6 +143,21 @@ for (const signal of ['SIGTERM', 'SIGINT']) {
 const uuidBytes = Buffer.from(UUID.replace(/-/g, ''), 'hex');
 const trojanHash = crypto.createHash('sha224').update(UUID).digest('hex');
 let publicIP = '';
+async function getISP() {
+  try {
+    const { data } = await axios.get('https://api.ip.sb/geoip', {
+      headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000
+    });
+    return [data.region, data.isp].filter(Boolean).join('-').replace(/\s+/g, '_');
+  } catch {
+    try {
+      const { data } = await axios.get('http://ip-api.com/json', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 3000
+      });
+      return [data.regionName, data.org].filter(Boolean).join('-').replace(/\s+/g, '_');
+    } catch { return ''; }
+  }
+}
 
 async function subscriptionEndpoint(req) {
   if (DOMAIN && DOMAIN !== 'your-domain.com') return { host: DOMAIN, port: 443, tls: 'tls' };
@@ -157,9 +185,10 @@ const httpServer = http.createServer(async (req, res) => {
   } else if (pathname === '/' + SUB_PATH) {
     try {
       const { host, port, tls } = await subscriptionEndpoint(req);
+      const isp = await getISP();
       const address = net.isIP(host) === 6 ? '[' + host + ']' : host;
       const query = new URLSearchParams({ security: tls, sni: host, fp: 'chrome', type: 'ws', host, path: '/' + WSPATH });
-      const label = encodeURIComponent(NAME);
+      const label = encodeURIComponent([NAME, isp].filter(Boolean).join('-'));
       const ssPlugin = 'v2ray-plugin;mode=websocket;host=' + host + ';path=/' + WSPATH +
         (tls === 'tls' ? ';tls' : '') + ';sni=' + host + ';mux=0';
       const links = [
@@ -235,9 +264,25 @@ function parseHeader(message) {
   return { host: address.host, port, offset: address.offset + 4 };
 }
 
-function forwardConnection(ws, header, message) {
+async function resolveHost(host) {
+  if (net.isIP(host)) return host;
+  try {
+    const { data } = await axios.get('https://dns.google/resolve', {
+      params: { name: host, type: 'A' }, timeout: 5000,
+      headers: { Accept: 'application/dns-json' }
+    });
+    const record = data.Answer?.find(answer => answer.type === 1);
+    if (record) return record.data;
+  } catch {}
+  return host;
+}
+
+async function forwardConnection(ws, header, message) {
   const duplex = createWebSocketStream(ws);
-  const socket = net.connect({ host: header.host, port: header.port });
+  duplex.on('error', () => ws.terminate());
+  const host = await resolveHost(header.host);
+  if (ws.readyState !== WebSocket.OPEN) return duplex.destroy();
+  const socket = net.connect({ host, port: header.port });
   const close = () => { socket.destroy(); duplex.destroy(); ws.terminate(); };
   socket.setTimeout(30000, close);
   socket.on('error', close);
@@ -269,7 +314,7 @@ wss.on('connection', (ws, req) => {
       if (!header) return;
       clearTimeout(timer);
       ws.off('message', onMessage);
-      forwardConnection(ws, header, initial);
+      forwardConnection(ws, header, initial).catch(() => ws.terminate());
     } catch {
       clearTimeout(timer);
       ws.close();
