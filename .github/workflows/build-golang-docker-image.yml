@@ -1,14 +1,6 @@
 name: Build Golang Docker Image
 
 on:
-  push:
-    branches: [ golang ]
-    paths:
-      - 'Dockerfile'
-      - 'index.html'
-      - 'main.go'
-  pull_request:
-    branches: [ golang ]
   workflow_dispatch:
 
 jobs:

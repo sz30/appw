@@ -1,15 +1,6 @@
 name: Build huggingface Image
 
 on:
-  push:
-    branches: [ hug ]
-    paths:
-      - 'Dockerfile'
-      - 'index.js'
-      - 'package.json'
-      - 'index.html'
-  pull_request:
-    branches: [ hug ]
   workflow_dispatch:
 
 jobs:

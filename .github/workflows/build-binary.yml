@@ -1,12 +1,6 @@
 name: Build and Release Binary
 
 on:
-  push:
-    branches: [ dev ]
-    paths:
-      - 'index.js'
-      - 'package.json'
-      - 'index.html'
   workflow_dispatch:
 
 jobs:
